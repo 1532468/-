@@ -1,6 +1,7 @@
 import datetime
 import torch
 from sklearn.metrics import precision_recall_fscore_support as prfs
+from sklearn.metrics import jaccard_score as jac
 from utils.parser import get_parser_with_args
 from utils.helpers import (get_loaders, get_criterion,
                            load_model, initialize_metrics, get_mean_metrics,
@@ -13,58 +14,55 @@ from tqdm import tqdm
 import random
 import numpy as np
 
-
-"""
-Initialize Parser and define arguments
-"""
-parser, metadata = get_parser_with_args()
-opt = parser.parse_args()
-
-"""
-Initialize experiments log
-"""
-logging.basicConfig(level=logging.INFO)
-writer = SummaryWriter(opt.log_dir + f'/{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}/')
-
-"""
-Set up environment: define paths, download data, and set device
-"""
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-dev = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-logging.info('GPU AVAILABLE? ' + str(torch.cuda.is_available()))
-
-def seed_torch(seed):
-    random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    # torch.cuda.manual_seed_all(seed) # if you are using multi-GPU.
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
-
-seed_torch(seed=777)
-
-
-train_loader, val_loader = get_loaders(opt)
-
-"""
-Load Model then define other aspects of the model
-"""
-logging.info('LOADING Model')
-model = load_model(opt, dev)
-
-criterion = get_criterion(opt)
-optimizer = torch.optim.AdamW(model.parameters(), lr=opt.learning_rate) # Be careful when you adjust learning rate, you can refer to the linear scaling rule
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=8, gamma=0.5)
-
-"""
- Set starting values
-"""
-
 if __name__ == '__main__' :
+    """
+    Initialize Parser and define arguments
+    """
+    parser, metadata = get_parser_with_args()
+    opt = parser.parse_args()
 
-    best_metrics = {'cd_f1scores': -1, 'cd_recalls': -1, 'cd_precisions': -1}
+    """
+    Initialize experiments log
+    """
+    logging.basicConfig(level=logging.INFO)
+    writer = SummaryWriter(opt.log_dir + f'/{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}/')
+
+    """
+    Set up environment: define paths, download data, and set device
+    """
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    dev = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    logging.info('GPU AVAILABLE? ' + str(torch.cuda.is_available()))
+
+    def seed_torch(seed):
+        random.seed(seed)
+        os.environ['PYTHONHASHSEED'] = str(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        # torch.cuda.manual_seed_all(seed) # if you are using multi-GPU.
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+
+    seed_torch(seed=777)
+
+
+    train_loader, val_loader = get_loaders(opt)
+
+    """
+    Load Model then define other aspects of the model
+    """
+    logging.info('LOADING Model')
+    model = load_model(opt, dev)
+
+    criterion = get_criterion(opt)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=opt.learning_rate) # Be careful when you adjust learning rate, you can refer to the linear scaling rule
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=8, gamma=0.5)
+
+    """
+    Set starting values
+    """
+    best_metrics = {'cd_IoU':-1, 'cd_f1scores': -1, 'cd_recalls': -1, 'cd_precisions': -1}
     logging.info('STARTING training')
     total_step = -1
 
@@ -79,10 +77,12 @@ if __name__ == '__main__' :
         logging.info('SET model mode to train!')
         batch_iter = 0
         tbar = tqdm(train_loader)
+
         for batch_img1, batch_img2, labels in tbar:
             tbar.set_description("epoch {} info ".format(epoch) + str(batch_iter) + " - " + str(batch_iter+opt.batch_size))
             batch_iter = batch_iter+opt.batch_size
             total_step += 1
+
             # Set variables for training
             batch_img1 = batch_img1.float().to(dev)
             batch_img2 = batch_img2.float().to(dev)
@@ -102,12 +102,16 @@ if __name__ == '__main__' :
             cd_preds = cd_preds[-1]
             _, cd_preds = torch.max(cd_preds, 1)
 
-            # Calculate and log other batch metrics
-            cd_corrects = (100 *
-                           (cd_preds.squeeze().byte() == labels.squeeze().byte()).sum() /
-                           (labels.size()[0] * (opt.patch_size**2)))
+
+            # 평가지표
 
             cd_train_report = prfs(labels.data.cpu().numpy().flatten(),
+                                   cd_preds.data.cpu().numpy().flatten(),
+                                   average='binary',
+                                   zero_division=0,
+                                   pos_label=1)
+            
+            cd_IoU= jac(labels.data.cpu().numpy().flatten(),
                                    cd_preds.data.cpu().numpy().flatten(),
                                    average='binary',
                                    zero_division=0,
@@ -115,8 +119,8 @@ if __name__ == '__main__' :
 
             train_metrics = set_metrics(train_metrics,
                                         cd_loss,
-                                        cd_corrects,
                                         cd_train_report,
+                                        cd_IoU,
                                         scheduler.get_last_lr())
 
             # log the batch mean metrics
@@ -151,21 +155,24 @@ if __name__ == '__main__' :
                 _, cd_preds = torch.max(cd_preds, 1)
 
                 # Calculate and log other batch metrics
-                cd_corrects = (100 *
-                               (cd_preds.squeeze().byte() == labels.squeeze().byte()).sum() /
-                               (labels.size()[0] * (opt.patch_size**2)))
 
                 cd_val_report = prfs(labels.data.cpu().numpy().flatten(),
-                                     cd_preds.data.cpu().numpy().flatten(),
-                                     average='binary',
-                                     zero_division=0,
-                                     pos_label=1)
+                                    cd_preds.data.cpu().numpy().flatten(),
+                                    average='binary',
+                                    zero_division=0,
+                                    pos_label=1)
+
+                cd_IoU= jac(labels.data.cpu().numpy().flatten(),
+                                   cd_preds.data.cpu().numpy().flatten(),
+                                   average='binary',
+                                   zero_division=0,
+                                   pos_label=1)   
 
                 val_metrics = set_metrics(val_metrics,
-                                          cd_loss,
-                                          cd_corrects,
-                                          cd_val_report,
-                                          scheduler.get_last_lr())
+                                        cd_loss,
+                                        cd_val_report,
+                                        cd_IoU,
+                                        scheduler.get_last_lr())
 
                 # log the batch mean metrics
                 mean_val_metrics = get_mean_metrics(val_metrics)
@@ -181,11 +188,7 @@ if __name__ == '__main__' :
             """
             Store the weights of good epochs based on validation results
             """
-            if ((mean_val_metrics['cd_precisions'] > best_metrics['cd_precisions'])
-                    or
-                    (mean_val_metrics['cd_recalls'] > best_metrics['cd_recalls'])
-                    or
-                    (mean_val_metrics['cd_f1scores'] > best_metrics['cd_f1scores'])):
+            if (mean_val_metrics['cd_IoU'] > best_metrics['cd_IoU']):
 
                 # Insert training and epoch information to metadata dictionary
                 logging.info('updata the model')
