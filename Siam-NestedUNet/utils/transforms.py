@@ -48,8 +48,8 @@ class ToTensor(object):
 
         return {'image': (img1, img2),
                 'label': mask}
-
-
+    
+    
 class RandomHorizontalFlip(object):
     def __call__(self, sample):
         img1 = sample['image'][0]
@@ -213,10 +213,10 @@ We don't use Normalize here, because it will bring negative effects.
 the mask of ground truth is converted to [0,1] in ToTensor() function.
 '''
 train_transforms = transforms.Compose([
-            RandomHorizontalFlip(),
-            RandomVerticalFlip(),
-            RandomFixRotate(),
-            # RandomScaleCrop(base_size=self.args.base_size, crop_size=self.args.crop_size),
+            # RandomHorizontalFlip(),
+            # RandomVerticalFlip(),
+            # RandomFixRotate(),
+            # # RandomScaleCrop(base_size=self.args.base_size, crop_size=self.args.crop_size),
             # RandomGaussianBlur(),
             # Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
             ToTensor()])

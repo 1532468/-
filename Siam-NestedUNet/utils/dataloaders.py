@@ -1,7 +1,10 @@
 import os
+import numpy as np
 import torch.utils.data as data
+import torchvision
 from PIL import Image
 from utils import transforms as tr
+import BCODE_Albumentations as BCODE_A
 
 
 '''
@@ -76,6 +79,7 @@ def cdd_loader(img_path, label_path, aug):
     img2 = Image.open(dir + 'B/' + name)
     label = Image.open(label_path).convert("L")
 
+    
     # img1 = img1.convert('RGB')
     # img2 = img2.convert('RGB')
     # label = label.convert('RGB')
@@ -86,14 +90,39 @@ def cdd_loader(img_path, label_path, aug):
         img2 = img2.resize(re_size)
         label = label.resize(re_size)
 
+
+
+#     sample = {'image': (img1, img2), 'label': label}
+
+#     if aug:
+#         sample = tr.train_transforms(sample)
+#     else:
+#         sample = tr.test_transforms(sample)
+
+#     return sample['image'][0], sample['image'][1], sample['label']
+    
+# -------------------------------------------------------------------------------------
+# Albumentations 적용 코드
+# 22.11. 7.(월)
+
+    # to nparray
+    img1 = np.asarray(img1)
+    img2 = np.asarray(img2)
+    label = np.asarray(label)
+    
     sample = {'image': (img1, img2), 'label': label}
+    
+    if aug :
+        sample = BCODE_A.Albumentations(img1, img2, label)            
+        # change to dic key
+        sample = {'image': (sample['image'], sample['image0']), 'label': sample['mask']}
 
-    if aug:
-        sample = tr.train_transforms(sample)
-    else:
-        sample = tr.test_transforms(sample)
-
+        # toTensor
+    sample = tr.train_transforms(sample) 
+    
     return sample['image'][0], sample['image'][1], sample['label']
+
+# -------------------------------------------------------------------------------------
 
 
 class CDDloader(data.Dataset):
