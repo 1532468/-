@@ -22,10 +22,10 @@ def initialize_metrics():
     """
     metrics = {
         'cd_losses': [],
-        'cd_precisions': [],
-        'cd_recalls': [],
-        'cd_f1scores': [],
-        'cd_IoU' : [],
+        'cd_miou': [],
+        'cd_iou1': [],
+        'cd_iou2': [],
+        'cd_iou3' : [],
         'learning_rate': [],
     }
 
@@ -49,7 +49,7 @@ def get_mean_metrics(metric_dict):
     return {k: np.mean(v) for k, v in metric_dict.items()}
 
 
-def set_metrics(metric_dict, cd_loss, cd_report, cd_IoU, lr):
+def set_metrics(metric_dict, cd_loss, cd_report, lr):
     """Updates metric dict with batch metrics
 
     Parameters
@@ -71,20 +71,20 @@ def set_metrics(metric_dict, cd_loss, cd_report, cd_IoU, lr):
 
     """
     metric_dict['cd_losses'].append(cd_loss.item())
-    metric_dict['cd_precisions'].append(cd_report[0])
-    metric_dict['cd_recalls'].append(cd_report[1])
-    metric_dict['cd_f1scores'].append(cd_report[2])
-    metric_dict['cd_IoU'].append(cd_IoU)
+    metric_dict['cd_miou'].append(cd_report[0])
+    metric_dict['cd_iou1'].append(cd_report[1])
+    metric_dict['cd_iou2'].append(cd_report[2])
+    metric_dict['cd_iou3'].append(cd_report[3])
     metric_dict['learning_rate'].append(lr)
 
     return metric_dict
 
-def set_test_metrics(metric_dict, cd_report, cd_IoU):
+def set_test_metrics(metric_dict, cd_report):
     
-    metric_dict['cd_precisions'].append(cd_report[0])
-    metric_dict['cd_recalls'].append(cd_report[1])
-    metric_dict['cd_f1scores'].append(cd_report[2])
-    metric_dict['cd_IoU'].append(cd_IoU)
+    metric_dict['cd_miou'].append(cd_report[0])
+    metric_dict['cd_iou1'].append(cd_report[1])
+    metric_dict['cd_iou2'].append(cd_report[2])
+    metric_dict['cd_iou3'].append(cd_report[3])
 
     return metric_dict
 
