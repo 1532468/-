@@ -6,6 +6,8 @@ from utils.parser import get_parser_with_args
 from utils.helpers import (get_loaders, get_criterion,
                            load_model, initialize_metrics, get_mean_metrics,
                            set_metrics)
+from utils.met import Iou
+
 import os
 import logging
 import json
@@ -53,7 +55,9 @@ if __name__ == '__main__' :
     Load Model then define other aspects of the model
     """
     logging.info('LOADING Model')
-    model = load_model(opt, dev)
+    
+    # model = load_model(opt, dev)
+    model = torch.load('./weights/snunet-32.pt')
 
     criterion = get_criterion(opt)
     optimizer = torch.optim.AdamW(model.parameters(), lr=opt.learning_rate) # Be careful when you adjust learning rate, you can refer to the linear scaling rule
@@ -104,23 +108,16 @@ if __name__ == '__main__' :
 
 
             # 평가지표
+            miou = Iou.get_miou(cd_preds, labels)
+            iou1 = Iou.get_iou(cd_preds, labels, 1)
+            iou2 = Iou.get_iou(cd_preds, labels, 2)
+            iou3 = Iou.get_iou(cd_preds, labels, 3)
 
-            cd_train_report = prfs(labels.data.cpu().numpy().flatten(),
-                                   cd_preds.data.cpu().numpy().flatten(),
-                                   average='binary',
-                                   zero_division=0,
-                                   pos_label=1)
-            
-            cd_IoU= jac(labels.data.cpu().numpy().flatten(),
-                                   cd_preds.data.cpu().numpy().flatten(),
-                                   average='binary',
-                                   zero_division=0,
-                                   pos_label=1)
+            cd_train_report = [miou, iou1, iou2, iou3]
 
             train_metrics = set_metrics(train_metrics,
                                         cd_loss,
                                         cd_train_report,
-                                        cd_IoU,
                                         scheduler.get_last_lr())
 
             # log the batch mean metrics
@@ -156,22 +153,15 @@ if __name__ == '__main__' :
 
                 # Calculate and log other batch metrics
 
-                cd_val_report = prfs(labels.data.cpu().numpy().flatten(),
-                                    cd_preds.data.cpu().numpy().flatten(),
-                                    average='binary',
-                                    zero_division=0,
-                                    pos_label=1)
-
-                cd_IoU= jac(labels.data.cpu().numpy().flatten(),
-                                   cd_preds.data.cpu().numpy().flatten(),
-                                   average='binary',
-                                   zero_division=0,
-                                   pos_label=1)   
+                miou = Iou.get_miou(cd_preds, labels)
+                iou1 = Iou.get_iou(cd_preds, labels, 1)
+                iou2 = Iou.get_iou(cd_preds, labels, 2)
+                iou3 = Iou.get_iou(cd_preds, labels, 3)
+                cd_val_report = [miou, iou1, iou2, iou3]
 
                 val_metrics = set_metrics(val_metrics,
                                         cd_loss,
                                         cd_val_report,
-                                        cd_IoU,
                                         scheduler.get_last_lr())
 
                 # log the batch mean metrics
@@ -188,7 +178,7 @@ if __name__ == '__main__' :
             """
             Store the weights of good epochs based on validation results
             """
-            if (mean_val_metrics['cd_IoU'] > best_metrics['cd_IoU']):
+            if (mean_val_metrics['cd_miou'] > best_metrics['cd_miou']):
 
                 # Insert training and epoch information to metadata dictionary
                 logging.info('updata the model')
