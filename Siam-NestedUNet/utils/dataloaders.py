@@ -4,7 +4,8 @@ import torch.utils.data as data
 import torchvision
 from PIL import Image
 from utils import transforms as tr
-import BCODE_Albumentations as BCODE_A
+import matplotlib.pyplot as plt
+import album as BCODE_A
 
 
 '''
@@ -72,23 +73,63 @@ def full_test_loader(data_dir):
     return test_dataset
 
 def cdd_loader(img_path, label_path, aug):
+
+# -------------------------------------------------------------------------------------
+# img => img1, img2 split, mask => mask1 + mask2 
+# 22.11. 8.(화)
     dir = img_path[0]
     name = img_path[1]
 
-    img1 = Image.open(dir + 'A/' + name)
-    img2 = Image.open(dir + 'B/' + name)
-    label = Image.open(label_path).convert("L")
+    image = plt.imread(dir + name)
+    label = plt.imread(label_path)
+
+    if image.shape == (754, 1508):
+        img1 = image[:, :754]
+        img2 = image[:, 754:]
+    else:
+        img1 = image[:, :750]
+        img2 = image[:, 750:]
+
+    if label.shape == (754, 1508):
+        mask1 = label[:,:754]
+        mask2 = label[:,754:]
+    else:
+        mask1 = label[:,:750]
+        mask2 = label[:,750:]
+    label = mask1 + mask2
+    
+    sample = {'image': (img1, img2), 'label': label}
+    
+    if aug :
+        sample = BCODE_A.Albumentations(img1, img2, label)            
+        # change to dic key
+        sample = {'image': (sample['image'], sample['image0']), 'label': sample['mask']}
+
+        # toTensor
+    sample = tr.train_transforms(sample) 
+    
+    return sample['image'][0], sample['image'][1], sample['label']
+
 
     
-    # img1 = img1.convert('RGB')
-    # img2 = img2.convert('RGB')
-    # label = label.convert('RGB')
+# def cdd_loader(img_path, label_path, aug):
+#     dir = img_path[0]
+#     name = img_path[1]
 
-    re_size = (256,256)
-    if img1.size != (256, 256):
-        img1 = img1.resize(re_size)
-        img2 = img2.resize(re_size)
-        label = label.resize(re_size)
+#     img1 = Image.open(dir + 'A/' + name)
+#     img2 = Image.open(dir + 'B/' + name)
+#     label = Image.open(label_path).convert("L")
+
+    
+#     # img1 = img1.convert('RGB')
+#     # img2 = img2.convert('RGB')
+#     # label = label.convert('RGB')
+
+#     re_size = (256,256)
+#     if img1.size != (256, 256):
+#         img1 = img1.resize(re_size)
+#         img2 = img2.resize(re_size)
+#         label = label.resize(re_size)
 
 
 
@@ -105,22 +146,22 @@ def cdd_loader(img_path, label_path, aug):
 # Albumentations 적용 코드
 # 22.11. 7.(월)
 
-    # to nparray
-    img1 = np.asarray(img1)
-    img2 = np.asarray(img2)
-    label = np.asarray(label)
+    # # to nparray
+    # img1 = np.asarray(img1)
+    # img2 = np.asarray(img2)
+    # label = np.asarray(label)
     
-    sample = {'image': (img1, img2), 'label': label}
+    # sample = {'image': (img1, img2), 'label': label}
     
-    if aug :
-        sample = BCODE_A.Albumentations(img1, img2, label)            
-        # change to dic key
-        sample = {'image': (sample['image'], sample['image0']), 'label': sample['mask']}
+    # if aug :
+    #     sample = BCODE_A.Albumentations(img1, img2, label)            
+    #     # change to dic key
+    #     sample = {'image': (sample['image'], sample['image0']), 'label': sample['mask']}
 
-        # toTensor
-    sample = tr.train_transforms(sample) 
+    #     # toTensor
+    # sample = tr.train_transforms(sample) 
     
-    return sample['image'][0], sample['image'][1], sample['label']
+    # return sample['image'][0], sample['image'][1], sample['label']
 
 # -------------------------------------------------------------------------------------
 
